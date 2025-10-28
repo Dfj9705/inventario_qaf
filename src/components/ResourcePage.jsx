@@ -328,6 +328,122 @@ const ResourcePage = ({
     setActiveModal(null)
   }
 
+  const resolveRowId = useCallback(
+    (row) => {
+      if (!row || typeof row !== 'object') {
+        return ''
+      }
+
+      if (typeof updateConfig?.resolveId === 'function') {
+        const value = updateConfig.resolveId(row)
+        if (value !== undefined && value !== null && value !== '') {
+          return value
+        }
+      }
+
+      if (typeof deleteConfig?.resolveId === 'function') {
+        const value = deleteConfig.resolveId(row)
+        if (value !== undefined && value !== null && value !== '') {
+          return value
+        }
+      }
+
+      const candidateKeys = [updateConfig?.idField, deleteConfig?.idField, 'id', 'ID', 'uuid']
+        .filter(Boolean)
+        .map((key) => String(key))
+
+      for (const key of candidateKeys) {
+        const value = row[key]
+        if (value !== undefined && value !== null && value !== '') {
+          return value
+        }
+      }
+
+      return row.id ?? row.ID ?? ''
+    },
+    [updateConfig, deleteConfig],
+  )
+
+  const buildUpdateValuesFromRow = useCallback(
+    (row) => {
+      const values = { ...initialUpdateValues }
+      if (!row || typeof row !== 'object') {
+        return values
+      }
+
+      updateFields.forEach((field) => {
+        const { name, rowKey, getValueFromRow } = field
+        if (!name) {
+          return
+        }
+
+        if (typeof getValueFromRow === 'function') {
+          const resolved = getValueFromRow(row)
+          if (resolved !== undefined) {
+            values[name] = resolved
+          }
+          return
+        }
+
+        const key = rowKey ?? name
+        if (row[key] !== undefined) {
+          values[name] = row[key]
+        }
+      })
+
+      return values
+    },
+    [initialUpdateValues, updateFields],
+  )
+
+  const openUpdateFromRow = useCallback(
+    (row) => {
+      if (!updateConfig) {
+        return
+      }
+
+      const idValue = resolveRowId(row)
+      if (idValue === undefined || idValue === null || idValue === '') {
+        setFeedback({
+          type: 'error',
+          message:
+            updateConfig.missingIdMessage ?? 'No se pudo determinar el ID del registro seleccionado.',
+        })
+        return
+      }
+
+      refreshSelectOptions()
+      setUpdateId(String(idValue))
+      setUpdateValues(buildUpdateValuesFromRow(row))
+      setFeedback(null)
+      setActiveModal('update')
+    },
+    [updateConfig, resolveRowId, refreshSelectOptions, buildUpdateValuesFromRow],
+  )
+
+  const openDeleteFromRow = useCallback(
+    (row) => {
+      if (!deleteConfig) {
+        return
+      }
+
+      const idValue = resolveRowId(row)
+      if (idValue === undefined || idValue === null || idValue === '') {
+        setFeedback({
+          type: 'error',
+          message:
+            deleteConfig.missingIdMessage ?? 'No se pudo determinar el ID del registro seleccionado.',
+        })
+        return
+      }
+
+      setDeleteId(String(idValue))
+      setFeedback(null)
+      setActiveModal('delete')
+    },
+    [deleteConfig, resolveRowId],
+  )
+
   const renderField = (field, values, onChange) => {
     const {
       name,
@@ -408,6 +524,33 @@ const ResourcePage = ({
     )
   }
 
+  const tableRowActions = useMemo(() => {
+    const actions = []
+
+    if (updateConfig) {
+      actions.push({
+        key: 'update',
+        label: updateConfig.rowActionLabel ?? 'Editar',
+        title: updateConfig.rowActionTitle ?? 'Editar registro',
+        onClick: openUpdateFromRow,
+        disabled: isUpdating,
+      })
+    }
+
+    if (deleteConfig) {
+      actions.push({
+        key: 'delete',
+        label: deleteConfig.rowActionLabel ?? 'Eliminar',
+        title: deleteConfig.rowActionTitle ?? 'Eliminar registro',
+        onClick: openDeleteFromRow,
+        disabled: isDeleting,
+        variant: 'danger',
+      })
+    }
+
+    return actions
+  }, [updateConfig, deleteConfig, openUpdateFromRow, openDeleteFromRow, isUpdating, isDeleting])
+
   return (
     <section className="page">
       <header className="page-header">
@@ -446,7 +589,7 @@ const ResourcePage = ({
 
       <div className="card">
         <h2>Registros disponibles</h2>
-        <DataTable columns={columns} data={items} loading={loading} />
+        <DataTable columns={columns} data={items} loading={loading} rowActions={tableRowActions} />
       </div>
 
       {feedback && (

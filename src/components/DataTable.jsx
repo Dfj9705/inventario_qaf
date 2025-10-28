@@ -70,6 +70,7 @@ const DataTable = ({
   loading = false,
   emptyMessage = 'No hay registros disponibles.',
   rowsPerPageOptions = DEFAULT_ROWS_PER_PAGE_OPTIONS,
+  rowActions = [],
 }) => {
   const computedColumns = useMemo(
     () => normalizeColumns(columns, data),
@@ -117,6 +118,9 @@ const DataTable = ({
   const totalPages = Math.max(1, Math.ceil(sortedData.length / rowsPerPage))
   const startIndex = (page - 1) * rowsPerPage
   const paginatedData = sortedData.slice(startIndex, startIndex + rowsPerPage)
+
+  const hasRowActions = rowActions?.length > 0
+  const totalColumns = computedColumns.length + (hasRowActions ? 1 : 0)
 
   useEffect(() => {
     setPage(1)
@@ -195,12 +199,17 @@ const DataTable = ({
                   </th>
                 )
               })}
+              {hasRowActions && (
+                <th scope="col" className="table-actions-header">
+                  Acciones
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={computedColumns.length} className="table-empty">
+                <td colSpan={totalColumns} className="table-empty">
                   Cargando información…
                 </td>
               </tr>
@@ -212,11 +221,32 @@ const DataTable = ({
                       {column.render(row) ?? ''}
                     </td>
                   ))}
+                  {hasRowActions && (
+                    <td className="table-actions-cell">
+                      <div className="table-actions">
+                        {rowActions.map((action, actionIndex) => {
+                          const key = action.key ?? `${action.label ?? 'action'}-${actionIndex}`
+                          return (
+                            <button
+                              type="button"
+                              key={key}
+                              onClick={() => action.onClick?.(row)}
+                              disabled={action.disabled}
+                              className={action.variant ? `action-${action.variant}` : undefined}
+                              title={action.title}
+                            >
+                              {action.label ?? 'Acción'}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan={computedColumns.length} className="table-empty">
+                <td colSpan={totalColumns} className="table-empty">
                   {emptyMessage}
                 </td>
               </tr>
