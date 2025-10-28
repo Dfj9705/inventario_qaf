@@ -14,23 +14,10 @@ const warehouseColumns = [
     render: (row) => row.nombre ?? row.name ?? '',
   },
   {
-    key: 'codigo',
-    label: 'Código',
-    sortable: true,
-    render: (row) => row.codigo ?? row.code ?? '—',
-  },
-  {
     key: 'ubicacion',
     label: 'Ubicación',
     sortable: true,
     render: (row) => row.ubicacion ?? row.location ?? '—',
-  },
-  {
-    key: 'capacidad',
-    label: 'Capacidad',
-    sortable: true,
-    render: (row) => row.capacidad ?? row.capacity ?? '—',
-    sortValue: (row) => Number(row.capacidad ?? row.capacity ?? 0),
   },
 ]
 
@@ -46,21 +33,9 @@ const createConfig = {
       required: true,
     },
     {
-      name: 'codigo',
-      label: 'Código interno',
-      placeholder: 'ALM-001',
-    },
-    {
       name: 'ubicacion',
       label: 'Ubicación',
       placeholder: 'Ciudad de Guatemala',
-    },
-    {
-      name: 'capacidad',
-      label: 'Capacidad (unidades)',
-      type: 'number',
-      min: 0,
-      step: 1,
     },
     {
       name: 'descripcion',
