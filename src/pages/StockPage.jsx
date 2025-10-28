@@ -1,12 +1,5 @@
 import ResourcePage from '../components/ResourcePage'
-
 const stockColumns = [
-  {
-    key: 'id',
-    label: 'ID',
-    sortable: true,
-    render: (row) => row.id ?? '',
-  },
   {
     key: 'producto',
     label: 'Producto',
@@ -35,24 +28,8 @@ const stockColumns = [
     key: 'cantidad',
     label: 'Cantidad',
     sortable: true,
-    render: (row) => row.cantidad ?? row.quantity ?? '—',
-    sortValue: (row) => Number(row.cantidad ?? row.quantity ?? 0),
-  },
-  {
-    key: 'actualizado',
-    label: 'Última actualización',
-    sortable: true,
-    render: (row) => {
-      const value = row.actualizado ?? row.updated_at ?? row.updatedAt
-      if (!value) return '—'
-      const date = new Date(value)
-      return Number.isNaN(date.getTime()) ? value : date.toLocaleString('es-GT')
-    },
-    sortValue: (row) => {
-      const value = row.actualizado ?? row.updated_at ?? row.updatedAt
-      const date = new Date(value)
-      return Number.isNaN(date.getTime()) ? 0 : date.getTime()
-    },
+    render: (row) => row.stock ?? row.stock ?? '—',
+    sortValue: (row) => Number(row.stock ?? row.stock ?? 0),
   },
 ]
 

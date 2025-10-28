@@ -73,8 +73,8 @@ const createConfig = {
       type: 'select',
       required: true,
       options: [
-        { label: 'Entrada', value: 'entrada' },
-        { label: 'Salida', value: 'salida' },
+        { label: 'Entrada', value: 'IN' },
+        { label: 'Salida', value: 'OUT' },
       ],
     },
     {
