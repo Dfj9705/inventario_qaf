@@ -569,16 +569,6 @@ const ResourcePage = ({
               {updateConfig.triggerLabel ?? 'Editar registro'}
             </button>
           )}
-          {deleteConfig && (
-            <button type="button" onClick={() => openModal('delete')}>
-              {deleteConfig.triggerLabel ?? 'Eliminar registro'}
-            </button>
-          )}
-          {showConfig && (
-            <button type="button" onClick={() => openModal('show')}>
-              {showConfig.triggerLabel ?? 'Consultar registro'}
-            </button>
-          )}
           <button type="button" onClick={loadItems} disabled={loading}>
             {loading ? 'Actualizando…' : 'Actualizar'}
           </button>
@@ -630,16 +620,16 @@ const ResourcePage = ({
           <form className="modal-form" onSubmit={handleUpdate}>
             {updateConfig.subtitle && <p>{updateConfig.subtitle}</p>}
             <div className="form-fields">
-              <label className="form-field">
-                {updateConfig.idLabel ?? 'ID del registro'}
-                <input
-                  type="text"
-                  value={updateId}
-                  onChange={(event) => setUpdateId(event.target.value)}
-                  placeholder={updateConfig.idPlaceholder ?? '1'}
-                  required
-                />
-              </label>
+              <input
+                type="hidden"
+                value={updateId}
+                onChange={(event) => setUpdateId(event.target.value)}
+              />
+              <p className="field-helper">
+                {updateId
+                  ? `${updateConfig.idLabel ?? 'ID del registro'}: ${updateId}`
+                  : updateConfig.idHelperText ?? 'Selecciona un registro desde la tabla para actualizar.'}
+              </p>
               {updateFields.map((field) => renderField(field, updateValues, handleUpdateFieldChange))}
             </div>
             <div className="modal-actions">
@@ -663,16 +653,16 @@ const ResourcePage = ({
           <form className="modal-form" onSubmit={handleDelete}>
             {deleteConfig.subtitle && <p>{deleteConfig.subtitle}</p>}
             <div className="form-fields">
-              <label className="form-field">
-                {deleteConfig.idLabel ?? 'ID del registro'}
-                <input
-                  type="text"
-                  value={deleteId}
-                  onChange={(event) => setDeleteId(event.target.value)}
-                  placeholder={deleteConfig.idPlaceholder ?? '1'}
-                  required
-                />
-              </label>
+              <input
+                type="hidden"
+                value={deleteId}
+                onChange={(event) => setDeleteId(event.target.value)}
+              />
+              <p className="field-helper">
+                {deleteId
+                  ? `${deleteConfig.idLabel ?? 'ID del registro'}: ${deleteId}`
+                  : deleteConfig.idHelperText ?? 'Selecciona un registro desde la tabla para eliminar.'}
+              </p>
             </div>
             <div className="modal-actions">
               <button type="button" className="button-secondary" onClick={closeModal} disabled={isDeleting}>
