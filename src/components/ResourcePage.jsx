@@ -2,6 +2,26 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import apiClient from '../api/client'
 import DataTable from './DataTable'
 
+const Modal = ({ title, onClose, closeDisabled = false, children }) => (
+  <div className="modal-backdrop" role="presentation">
+    <div className="modal" role="dialog" aria-modal="true">
+      <header className="modal-header">
+        <h2>{title}</h2>
+        <button
+          type="button"
+          className="modal-close"
+          onClick={closeDisabled ? undefined : onClose}
+          disabled={closeDisabled}
+          aria-label="Cerrar"
+        >
+          ×
+        </button>
+      </header>
+      <div className="modal-content">{children}</div>
+    </div>
+  </div>
+)
+
 const buildInitialValues = (fields = []) => {
   const entries = fields.map((field) => [field.name, field.defaultValue ?? ''])
   return Object.fromEntries(entries)
@@ -66,6 +86,8 @@ const ResourcePage = ({
   const [isCreating, setIsCreating] = useState(false)
   const [isUpdating, setIsUpdating] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [activeModal, setActiveModal] = useState(null)
+  const [selectState, setSelectState] = useState({})
 
   useEffect(() => {
     setCreateValues(initialCreateValues)
@@ -90,9 +112,92 @@ const ResourcePage = ({
     }
   }, [endpoint])
 
+  const fetchOptionsForField = useCallback(async (field) => {
+    setSelectState((current) => ({
+      ...current,
+      [field.name]: {
+        options: current[field.name]?.options ?? [],
+        loading: true,
+        error: '',
+      },
+    }))
+
+    const getValue = field.getOptionValue
+      ? field.getOptionValue
+      : (item) => item?.[field.optionValueKey ?? 'id'] ?? item?.id
+    const getLabel = field.getOptionLabel
+      ? field.getOptionLabel
+      : (item) =>
+          item?.[field.optionLabelKey ?? 'nombre'] ??
+          item?.name ??
+          item?.title ??
+          getValue(item)
+
+    try {
+      const { data } = await apiClient.get(field.optionsEndpoint)
+      const collection = Array.isArray(data) ? data : data?.data ?? []
+      const options = collection
+        .map((item) => {
+          const value = getValue(item)
+          if (value === undefined || value === null) {
+            return null
+          }
+
+          const label = getLabel(item)
+          return {
+            value,
+            label: label ?? String(value),
+          }
+        })
+        .filter(Boolean)
+
+      setSelectState((current) => ({
+        ...current,
+        [field.name]: {
+          options,
+          loading: false,
+          error: '',
+        },
+      }))
+    } catch (err) {
+      setSelectState((current) => ({
+        ...current,
+        [field.name]: {
+          options: current[field.name]?.options ?? [],
+          loading: false,
+          error: getErrorMessage(err, 'No fue posible cargar las opciones.'),
+        },
+      }))
+    }
+  }, [])
+
+  const refreshSelectOptions = useCallback(() => {
+    const fieldsWithEndpoint = [...createFields, ...updateFields].filter(
+      (field) => field.type === 'select' && field.optionsEndpoint,
+    )
+
+    if (!fieldsWithEndpoint.length) {
+      return
+    }
+
+    const seen = new Set()
+    fieldsWithEndpoint.forEach((field) => {
+      const key = `${field.name}::${field.optionsEndpoint}`
+      if (seen.has(key)) {
+        return
+      }
+      seen.add(key)
+      fetchOptionsForField(field)
+    })
+  }, [createFields, updateFields, fetchOptionsForField])
+
   useEffect(() => {
     loadItems()
   }, [loadItems])
+
+  useEffect(() => {
+    refreshSelectOptions()
+  }, [refreshSelectOptions])
 
   const handleCreateFieldChange = (name, value) => {
     setCreateValues((current) => ({ ...current, [name]: value }))
@@ -114,6 +219,7 @@ const ResourcePage = ({
       setFeedback({ type: 'success', message: createConfig.successMessage ?? 'Registro creado correctamente.' })
       setCreateValues(initialCreateValues)
       await loadItems()
+      closeModal()
     } catch (err) {
       setFeedback({ type: 'error', message: getErrorMessage(err, 'No fue posible crear el registro.') })
     } finally {
@@ -137,6 +243,7 @@ const ResourcePage = ({
       await apiClient.put(`${endpoint}/${updateId}`, payload)
       setFeedback({ type: 'success', message: updateConfig.successMessage ?? 'Registro actualizado correctamente.' })
       await loadItems()
+      closeModal()
     } catch (err) {
       setFeedback({ type: 'error', message: getErrorMessage(err, 'No fue posible actualizar el registro.') })
     } finally {
@@ -160,6 +267,7 @@ const ResourcePage = ({
       setFeedback({ type: 'success', message: deleteConfig.successMessage ?? 'Registro eliminado correctamente.' })
       setDeleteId('')
       await loadItems()
+      closeModal()
     } catch (err) {
       setFeedback({ type: 'error', message: getErrorMessage(err, 'No fue posible eliminar el registro.') })
     } finally {
@@ -190,8 +298,50 @@ const ResourcePage = ({
     }
   }
 
+  const openModal = (type) => {
+    if (type === 'create') {
+      setCreateValues(initialCreateValues)
+      refreshSelectOptions()
+    }
+
+    if (type === 'update') {
+      setUpdateId('')
+      setUpdateValues(initialUpdateValues)
+      refreshSelectOptions()
+    }
+
+    if (type === 'delete') {
+      setDeleteId('')
+    }
+
+    if (type === 'show') {
+      setShowId('')
+      setSingleItem(null)
+      setSingleError('')
+      setSingleLoading(false)
+    }
+
+    setActiveModal(type)
+  }
+
+  const closeModal = () => {
+    setActiveModal(null)
+  }
+
   const renderField = (field, values, onChange) => {
-    const { name, label, type = 'text', placeholder, required, options, step, min, max, helperText } = field
+    const {
+      name,
+      label,
+      type = 'text',
+      placeholder,
+      required,
+      options,
+      step,
+      min,
+      max,
+      helperText,
+      disabled,
+    } = field
     const value = values[name] ?? ''
 
     if (type === 'textarea') {
@@ -211,21 +361,29 @@ const ResourcePage = ({
     }
 
     if (type === 'select') {
+      const dynamicOptions = selectState[name]?.options ?? []
+      const resolvedOptions = options ?? dynamicOptions
+      const loading = selectState[name]?.loading ?? false
+      const errorMessage = selectState[name]?.error ?? ''
+
       return (
         <label key={name} className="form-field">
           {label}
           <select
             value={value}
             required={required}
+            disabled={disabled || (loading && resolvedOptions.length === 0)}
             onChange={(event) => onChange(name, event.target.value)}
           >
             <option value="">Selecciona una opción</option>
-            {options?.map((option) => (
+            {resolvedOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
             ))}
           </select>
+          {loading && <span className="field-helper">Cargando opciones…</span>}
+          {errorMessage && <span className="field-error">{errorMessage}</span>}
           {helperText && <span className="field-helper">{helperText}</span>}
         </label>
       )
@@ -242,6 +400,7 @@ const ResourcePage = ({
           step={step}
           min={min}
           max={max}
+          disabled={disabled}
           onChange={(event) => onChange(name, event.target.value)}
         />
         {helperText && <span className="field-helper">{helperText}</span>}
@@ -256,9 +415,31 @@ const ResourcePage = ({
           <h1>{title}</h1>
           {description && <p className="page-description">{description}</p>}
         </div>
-        <button type="button" onClick={loadItems} disabled={loading}>
-          {loading ? 'Actualizando…' : 'Actualizar'}
-        </button>
+        <div className="page-actions">
+          {createConfig && (
+            <button type="button" onClick={() => openModal('create')}>
+              {createConfig.triggerLabel ?? 'Nuevo registro'}
+            </button>
+          )}
+          {updateConfig && (
+            <button type="button" onClick={() => openModal('update')}>
+              {updateConfig.triggerLabel ?? 'Editar registro'}
+            </button>
+          )}
+          {deleteConfig && (
+            <button type="button" onClick={() => openModal('delete')}>
+              {deleteConfig.triggerLabel ?? 'Eliminar registro'}
+            </button>
+          )}
+          {showConfig && (
+            <button type="button" onClick={() => openModal('show')}>
+              {showConfig.triggerLabel ?? 'Consultar registro'}
+            </button>
+          )}
+          <button type="button" onClick={loadItems} disabled={loading}>
+            {loading ? 'Actualizando…' : 'Actualizar'}
+          </button>
+        </div>
       </header>
 
       {error && <p className="error">{error}</p>}
@@ -268,97 +449,131 @@ const ResourcePage = ({
         <DataTable columns={columns} data={items} loading={loading} />
       </div>
 
-      <div className="forms-grid">
-        {createConfig && (
-          <form className="card form-card" onSubmit={handleCreate}>
-            <h2>{createConfig.title ?? 'Crear registro'}</h2>
+      {feedback && (
+        <p className={`feedback ${feedback.type === 'error' ? 'feedback-error' : 'feedback-success'}`}>
+          {feedback.message}
+        </p>
+      )}
+
+      {activeModal === 'create' && createConfig && (
+        <Modal
+          title={createConfig.title ?? 'Crear registro'}
+          onClose={closeModal}
+          closeDisabled={isCreating}
+        >
+          <form className="modal-form" onSubmit={handleCreate}>
             {createConfig.subtitle && <p>{createConfig.subtitle}</p>}
             <div className="form-fields">
               {createFields.map((field) => renderField(field, createValues, handleCreateFieldChange))}
             </div>
-            <div className="form-actions">
+            <div className="modal-actions">
+              <button type="button" className="button-secondary" onClick={closeModal} disabled={isCreating}>
+                Cancelar
+              </button>
               <button type="submit" disabled={isCreating}>
                 {isCreating ? 'Guardando…' : createConfig.submitLabel ?? 'Crear'}
               </button>
             </div>
           </form>
-        )}
+        </Modal>
+      )}
 
-        {updateConfig && (
-          <form className="card form-card" onSubmit={handleUpdate}>
-            <h2>{updateConfig.title ?? 'Actualizar registro'}</h2>
+      {activeModal === 'update' && updateConfig && (
+        <Modal
+          title={updateConfig.title ?? 'Actualizar registro'}
+          onClose={closeModal}
+          closeDisabled={isUpdating}
+        >
+          <form className="modal-form" onSubmit={handleUpdate}>
             {updateConfig.subtitle && <p>{updateConfig.subtitle}</p>}
-            <label className="form-field">
-              {updateConfig.idLabel ?? 'ID del registro'}
-              <input
-                type="text"
-                value={updateId}
-                onChange={(event) => setUpdateId(event.target.value)}
-                placeholder={updateConfig.idPlaceholder ?? '1'}
-                required
-              />
-            </label>
             <div className="form-fields">
+              <label className="form-field">
+                {updateConfig.idLabel ?? 'ID del registro'}
+                <input
+                  type="text"
+                  value={updateId}
+                  onChange={(event) => setUpdateId(event.target.value)}
+                  placeholder={updateConfig.idPlaceholder ?? '1'}
+                  required
+                />
+              </label>
               {updateFields.map((field) => renderField(field, updateValues, handleUpdateFieldChange))}
             </div>
-            <div className="form-actions">
+            <div className="modal-actions">
+              <button type="button" className="button-secondary" onClick={closeModal} disabled={isUpdating}>
+                Cancelar
+              </button>
               <button type="submit" disabled={isUpdating}>
                 {isUpdating ? 'Actualizando…' : updateConfig.submitLabel ?? 'Actualizar'}
               </button>
             </div>
           </form>
-        )}
+        </Modal>
+      )}
 
-        {deleteConfig && (
-          <form className="card form-card" onSubmit={handleDelete}>
-            <h2>{deleteConfig.title ?? 'Eliminar registro'}</h2>
+      {activeModal === 'delete' && deleteConfig && (
+        <Modal
+          title={deleteConfig.title ?? 'Eliminar registro'}
+          onClose={closeModal}
+          closeDisabled={isDeleting}
+        >
+          <form className="modal-form" onSubmit={handleDelete}>
             {deleteConfig.subtitle && <p>{deleteConfig.subtitle}</p>}
-            <label className="form-field">
-              {deleteConfig.idLabel ?? 'ID del registro'}
-              <input
-                type="text"
-                value={deleteId}
-                onChange={(event) => setDeleteId(event.target.value)}
-                placeholder={deleteConfig.idPlaceholder ?? '1'}
-                required
-              />
-            </label>
-            <div className="form-actions">
+            <div className="form-fields">
+              <label className="form-field">
+                {deleteConfig.idLabel ?? 'ID del registro'}
+                <input
+                  type="text"
+                  value={deleteId}
+                  onChange={(event) => setDeleteId(event.target.value)}
+                  placeholder={deleteConfig.idPlaceholder ?? '1'}
+                  required
+                />
+              </label>
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="button-secondary" onClick={closeModal} disabled={isDeleting}>
+                Cancelar
+              </button>
               <button type="submit" disabled={isDeleting}>
                 {isDeleting ? 'Eliminando…' : deleteConfig.submitLabel ?? 'Eliminar'}
               </button>
             </div>
           </form>
-        )}
-      </div>
-
-      {showConfig && (
-        <div className="card">
-          <h2>{showConfig.title ?? 'Consultar un registro'}</h2>
-          {showConfig.subtitle && <p>{showConfig.subtitle}</p>}
-          <form className="inline-form" onSubmit={handleShow}>
-            <label>
-              {showConfig.idLabel ?? 'ID'}
-              <input
-                type="text"
-                value={showId}
-                onChange={(event) => setShowId(event.target.value)}
-                placeholder={showConfig.idPlaceholder ?? '1'}
-              />
-            </label>
-            <button type="submit" disabled={singleLoading}>
-              {singleLoading ? 'Buscando…' : showConfig.submitLabel ?? 'Consultar'}
-            </button>
-          </form>
-          {singleError && <p className="error">{singleError}</p>}
-          {singleItem && <pre className="json-preview">{JSON.stringify(singleItem, null, 2)}</pre>}
-        </div>
+        </Modal>
       )}
 
-      {feedback && (
-        <p className={`feedback ${feedback.type === 'error' ? 'feedback-error' : 'feedback-success'}`}>
-          {feedback.message}
-        </p>
+      {activeModal === 'show' && showConfig && (
+        <Modal
+          title={showConfig.title ?? 'Consultar registro'}
+          onClose={closeModal}
+          closeDisabled={singleLoading}
+        >
+          <form className="modal-form" onSubmit={handleShow}>
+            {showConfig.subtitle && <p>{showConfig.subtitle}</p>}
+            <div className="form-fields">
+              <label className="form-field">
+                {showConfig.idLabel ?? 'ID'}
+                <input
+                  type="text"
+                  value={showId}
+                  onChange={(event) => setShowId(event.target.value)}
+                  placeholder={showConfig.idPlaceholder ?? '1'}
+                />
+              </label>
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="button-secondary" onClick={closeModal} disabled={singleLoading}>
+                Cerrar
+              </button>
+              <button type="submit" disabled={singleLoading}>
+                {singleLoading ? 'Buscando…' : showConfig.submitLabel ?? 'Consultar'}
+              </button>
+            </div>
+            {singleError && <p className="error">{singleError}</p>}
+            {singleItem && <pre className="json-preview">{JSON.stringify(singleItem, null, 2)}</pre>}
+          </form>
+        </Modal>
       )}
     </section>
   )
