@@ -202,30 +202,75 @@ const HomePage = () => {
   }, [dashboardData.stock])
 
   const movementSummary = useMemo(() => {
-    const counts = new Map()
+    if (!dashboardData.movements.length) {
+      return { productLabels: [], datasets: [] }
+    }
+
+    const productTotals = new Map()
 
     dashboardData.movements.forEach((movement) => {
+      const productLabel = resolveProductLabel(movement)
       const type = resolveMovementType(movement)
-      counts.set(type, (counts.get(type) ?? 0) + 1)
+      const quantity = Math.abs(
+        toNumber(movement?.cantidad ?? movement?.quantity ?? movement?.total ?? 0),
+      )
+
+      if (!productTotals.has(productLabel)) {
+        productTotals.set(productLabel, {
+          entrada: 0,
+          salida: 0,
+          otros: 0,
+          total: 0,
+        })
+      }
+
+      const summary = productTotals.get(productLabel)
+      const bucket = type === 'entrada' ? 'entrada' : type === 'salida' ? 'salida' : 'otros'
+
+      summary[bucket] += quantity
+      summary.total += quantity
     })
 
-    const preferredOrder = ['entrada', 'salida', 'otros']
-    const orderedKeys = [
-      ...preferredOrder.filter((key) => counts.has(key)),
-      ...Array.from(counts.keys()).filter((key) => !preferredOrder.includes(key)),
+    const sortedEntries = Array.from(productTotals.entries()).sort(
+      (a, b) => b[1].total - a[1].total,
+    )
+
+    const MAX_PRODUCTS = 6
+
+    let entriesToShow = sortedEntries
+    if (sortedEntries.length > MAX_PRODUCTS) {
+      const topEntries = sortedEntries.slice(0, MAX_PRODUCTS - 1)
+      const remainder = sortedEntries.slice(MAX_PRODUCTS - 1).reduce(
+        (acc, [, values]) => {
+          acc.entrada += values.entrada
+          acc.salida += values.salida
+          acc.otros += values.otros
+          acc.total += values.total
+          return acc
+        },
+        { entrada: 0, salida: 0, otros: 0, total: 0 },
+      )
+
+      entriesToShow = [...topEntries, ['Otros productos', remainder]]
+    }
+
+    const productLabels = entriesToShow.map(([label]) => label)
+
+    const datasetConfig = [
+      { key: 'entrada', label: 'Entradas', backgroundColor: '#22c55e' },
+      { key: 'salida', label: 'Salidas', backgroundColor: '#ef4444' },
+      { key: 'otros', label: 'Otros movimientos', backgroundColor: '#64748b' },
     ]
 
-    const labels = orderedKeys
-    const values = labels.map((label) => counts.get(label) ?? 0)
-    const displayLabels = labels.map((label) => label.charAt(0).toUpperCase() + label.slice(1))
-    const colors = labels.map((label) => {
-      if (label === 'entrada') return '#22c55e'
-      if (label === 'salida') return '#ef4444'
-      return '#64748b'
-    })
-    const total = values.reduce((sum, value) => sum + value, 0)
+    const datasets = datasetConfig
+      .map((config) => ({
+        label: config.label,
+        backgroundColor: config.backgroundColor,
+        data: entriesToShow.map(([, values]) => values[config.key] ?? 0),
+      }))
+      .filter((dataset) => dataset.data.some((value) => value > 0))
 
-    return { labels, displayLabels, values, colors, total }
+    return { productLabels, datasets }
   }, [dashboardData.movements])
 
   const recentMovements = useMemo(() => {
@@ -337,7 +382,11 @@ const HomePage = () => {
 
     const chartStore = chartsRef.current
 
-    if (!movementSummary.labels.length || !movementSummary.values.some((value) => value > 0)) {
+    if (
+      !movementSummary.productLabels.length ||
+      !movementSummary.datasets.length ||
+      !movementSummary.datasets.some((dataset) => dataset.data.some((value) => value > 0))
+    ) {
       if (chartStore.movements) {
         chartStore.movements.destroy()
         chartStore.movements = null
@@ -348,26 +397,24 @@ const HomePage = () => {
     const chartInstance = new Chart(movementChartRef.current, {
       type: 'bar',
       data: {
-        labels: movementSummary.displayLabels,
-        datasets: [
-          {
-            label: 'Movimientos',
-            data: movementSummary.values,
-            backgroundColor: movementSummary.colors,
-            borderRadius: 6,
-          },
-        ],
+        labels: movementSummary.productLabels,
+        datasets: movementSummary.datasets.map((dataset) => ({
+          ...dataset,
+          borderRadius: 6,
+          stack: 'movements',
+        })),
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
           legend: {
-            display: false,
+            display: true,
           },
           tooltip: {
             callbacks: {
-              label: (context) => `${context.parsed.y ?? 0} movimientos`,
+              label: (context) =>
+                `${context.dataset?.label ?? 'Movimientos'}: ${context.parsed.y ?? 0} unidades`,
             },
           },
         },
@@ -377,6 +424,10 @@ const HomePage = () => {
             ticks: {
               precision: 0,
             },
+            stacked: true,
+          },
+          x: {
+            stacked: true,
           },
         },
       },
@@ -401,8 +452,8 @@ const HomePage = () => {
     isChartReady && stockSummary.labels.length > 0 && stockSummary.values.some((value) => value > 0)
   const movementChartAvailable =
     isChartReady &&
-    movementSummary.labels.length > 0 &&
-    movementSummary.values.some((value) => value > 0)
+    movementSummary.productLabels.length > 0 &&
+    movementSummary.datasets.length > 0
 
   return (
     <section className="page home-dashboard">
@@ -472,20 +523,20 @@ const HomePage = () => {
         </article>
         <article className="chart-card">
           <header>
-            <h2>Movimientos por tipo</h2>
+            <h2>Entradas y salidas por producto</h2>
           </header>
           <div className="chart-container">
             {movementChartAvailable ? (
               <canvas
                 ref={movementChartRef}
                 role="img"
-                aria-label="Gráfica de barras con el total de movimientos por tipo"
+                aria-label="Gráfica de barras apiladas con las unidades de entradas y salidas por producto"
               />
             ) : (
               <p className="chart-placeholder">
                 {!isChartReady
                   ? 'Cargando librería de gráficas…'
-                  : 'No hay movimientos suficientes para graficar.'}
+                  : 'No hay movimientos suficientes para mostrar por producto.'}
               </p>
             )}
           </div>
