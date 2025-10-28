@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import Chart from 'chart.js/auto'
 import apiClient from '../api/client'
 
 const COLOR_PALETTE = [
@@ -82,9 +83,7 @@ const HomePage = () => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [refreshKey, setRefreshKey] = useState(0)
-  const [isChartReady, setIsChartReady] = useState(() =>
-    typeof window !== 'undefined' ? Boolean(window.Chart) : false,
-  )
+  const [isChartReady, setIsChartReady] = useState(false)
 
   const stockChartRef = useRef(null)
   const movementChartRef = useRef(null)
@@ -99,21 +98,9 @@ const HomePage = () => {
       return undefined
     }
 
-    if (window.Chart) {
-      setIsChartReady(true)
-      return undefined
-    }
+    setIsChartReady(true)
 
-    const intervalId = window.setInterval(() => {
-      if (window.Chart) {
-        window.clearInterval(intervalId)
-        setIsChartReady(true)
-      }
-    }, 200)
-
-    return () => {
-      window.clearInterval(intervalId)
-    }
+    return undefined
   }, [isChartReady])
 
   useEffect(() => {
@@ -305,7 +292,7 @@ const HomePage = () => {
       return undefined
     }
 
-    const chartInstance = new window.Chart(stockChartRef.current, {
+    const chartInstance = new Chart(stockChartRef.current, {
       type: 'doughnut',
       data: {
         labels: stockSummary.labels,
@@ -358,7 +345,7 @@ const HomePage = () => {
       return undefined
     }
 
-    const chartInstance = new window.Chart(movementChartRef.current, {
+    const chartInstance = new Chart(movementChartRef.current, {
       type: 'bar',
       data: {
         labels: movementSummary.displayLabels,
