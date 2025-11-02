@@ -19,4 +19,12 @@ describe('apiClient authentication header', () => {
 
     expect(apiClient.defaults.headers.common.Authorization).toBeUndefined()
   })
+
+  test('configura Accept con soporte para JSON por defecto', () => {
+    expect(apiClient.defaults.headers.common.Accept).toContain('application/json')
+  })
+
+  test('usa la URL base por defecto cuando no hay variable de entorno', () => {
+    expect(apiClient.defaults.baseURL).toBe('http://localhost:8000/api')
+  })
 })
