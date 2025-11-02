@@ -71,10 +71,10 @@ pipeline {
 
   post {
     success {
-      slackSend channel: '#ci-cd', message: "✅ FRONT QA OK – ${env.JOB_NAME} #${env.BUILD_NUMBER}", color: 'good'
+      slackSend channel: '#todo-miumg', message: "✅ FRONT QA OK – ${env.JOB_NAME} #${env.BUILD_NUMBER}", color: 'good'
     }
     failure {
-      slackSend channel: '#ci-cd', message: "❌ FRONT QA FALLÓ – ${env.JOB_NAME} #${env.BUILD_NUMBER}", color: 'danger'
+      slackSend channel: '#todo-miumg', message: "❌ FRONT QA FALLÓ – ${env.JOB_NAME} #${env.BUILD_NUMBER}", color: 'danger'
     }
   }
 }
