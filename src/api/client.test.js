@@ -25,6 +25,6 @@ describe('apiClient authentication header', () => {
   })
 
   test('usa la URL base por defecto cuando no hay variable de entorno', () => {
-    expect(apiClient.defaults.baseURL).toBe('http://localhost:8000/api')
+    expect(apiClient.defaults.baseURL).toBe('http://inventario-qa.test/api')
   })
 })
