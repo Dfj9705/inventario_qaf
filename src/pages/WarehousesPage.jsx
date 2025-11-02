@@ -1,0 +1,76 @@
+import ResourcePage from '../components/ResourcePage'
+
+const warehouseColumns = [
+  {
+    key: 'id',
+    label: 'ID',
+    sortable: true,
+    render: (row) => row.id ?? '',
+  },
+  {
+    key: 'nombre',
+    label: 'Nombre',
+    sortable: true,
+    render: (row) => row.nombre ?? row.name ?? '',
+  },
+  {
+    key: 'ubicacion',
+    label: 'Ubicación',
+    sortable: true,
+    render: (row) => row.ubicacion ?? row.location ?? '—',
+  },
+]
+
+const createConfig = {
+  title: 'Registrar almacén',
+  subtitle: 'Completa los datos básicos del nuevo almacén.',
+  submitLabel: 'Guardar almacén',
+  fields: [
+    {
+      name: 'nombre',
+      label: 'Nombre',
+      placeholder: 'Almacén central',
+      required: true,
+    },
+    {
+      name: 'ubicacion',
+      label: 'Ubicación',
+      placeholder: 'Ciudad de Guatemala',
+    },
+    {
+      name: 'descripcion',
+      label: 'Descripción',
+      type: 'textarea',
+      rows: 3,
+      placeholder: 'Notas adicionales del almacén',
+    },
+  ],
+}
+
+const updateConfig = {
+  title: 'Actualizar almacén',
+  idLabel: 'ID del almacén',
+  submitLabel: 'Actualizar almacén',
+  fields: createConfig.fields,
+}
+
+const deleteConfig = {
+  title: 'Eliminar almacén',
+  subtitle: 'Indica el ID del almacén que deseas eliminar.',
+  idLabel: 'ID del almacén',
+  submitLabel: 'Eliminar almacén',
+}
+
+const WarehousesPage = () => (
+  <ResourcePage
+    title="Almacenes"
+    endpoint="/almacenes"
+    description="Crea y actualiza los almacenes donde se resguarda el inventario."
+    columns={warehouseColumns}
+    createConfig={createConfig}
+    updateConfig={updateConfig}
+    deleteConfig={deleteConfig}
+  />
+)
+
+export default WarehousesPage
