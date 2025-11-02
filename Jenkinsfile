@@ -52,7 +52,7 @@ pipeline {
             def scannerHome = tool env.SONAR_INSTALL
             def cmd = [
               "-Dsonar.projectKey=${env.SONAR_PROJECT}",
-              "-Dsonar.projectName=PROYECTO FINAL FRONT",
+              "-Dsonar.projectName=PQAFINALFRONT",
               "-Dsonar.sources=src",
               "-Dsonar.exclusions=node_modules/**,dist/**,coverage/**",
               // si Jest genera cobertura lcov:
